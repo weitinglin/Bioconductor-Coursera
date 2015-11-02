@@ -1,0 +1,324 @@
+##Bioconductor for genomic data
+#quiz 2
+#20151019  weitinglin
+#Introduction
+#examine Epigenomics Roadmap data on the human H1 stem cell line;the Roadmap id number is "E003". We will use data on build"hg19",for peak will use narrowPeak.focus on chromosome 22
+
+source("http://www.bioconductor.org/biocLite.R")
+biocLite("BSgenome.Hsapiens.UCSC.hg19")
+
+#Q1
+library(BSgenome)
+library(AnnotationHub)
+library(BSgenome.Hsapiens.UCSC.hg19)
+available.genomes()
+
+seqlengths(BSgenome.Hsapiens.UCSC.hg19)
+seqnames(BSgenome.Hsapiens.UCSC.hg19)
+BSgenome.Hsapiens.UCSC.hg19$chr22
+A<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"A",as.prob=TRUE)
+C<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"C",as.prob=TRUE)
+T<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"T",as.prob=TRUE)
+G<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"G",as.prob=TRUE)
+N<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"N",as.prob=TRUE)
+
+nA<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"A",as.prob=FALSE)
+nC<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"C",as.prob=FALSE)
+nT<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"T",as.prob=FALSE)
+nG<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"G",as.prob=FALSE)
+nN<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"N",as.prob=FALSE)
+fA<-nA/(nA+nC+nT+nG)
+fC<-nC/(nA+nC+nT+nG)
+fT<-nT/(nA+nC+nT+nG)
+fG<-nG/(nA+nC+nT+nG)
+nC*nG/(nA+nC+nT+nG)
+
+
+
+
+A_frequency<-(A)
+A+C+T+G-N
+(C+G)/(A+C+T+G)
+#0.47988
+
+
+#Q2
+library(AnnotationHub)
+ah=AnnotationHub()
+ah_1=query(ah,c("H3K27me3","narrowPeak"))
+ah_1=query(ah_1,c("E003"))
+ah_1=ah_1[["AH29892"]]
+seqlevels(ah_1)
+ah_chr22=keepSeqlevels(ah_1,c("chr22"))
+ah_chr22
+trim(ah_chr22)
+v1<-Views(Hsapiens, ah_chr22)
+letterFrequency(v1,"GC",as.prob=TRUE)
+mean(letterFrequency(v1,"GC",as.prob=TRUE))
+head(v1)
+
+
+#0.004467924
+
+#Q3 the correlation between GC content and SignalValue
+matrix<-data.frame(letterFrequency(v1,"GC",as.prob=TRUE),ah_chr22$signalValue)
+cor(matrix)
+cor(letterFrequency(v1,"GC",as.prob=TRUE),ah_chr22$signalValue)
+sv=mcols(v1)
+
+
+#Q4 to cope with bigwig data 
+library(rtracklayer)
+ah_chip<-query(ah,c("fc.signal"))
+ah_chip<-query(ah_chip,c("H3K27me3"))
+ah_chip<-query(ah_chip,c("E003"))
+ah_chip<-ah_chip[["AH32033"]]
+
+class(ah_chip)
+ranges(ah_chr22)
+
+ah_chip.bw<-import(ah_chip,which=ah_chr22)
+chr22<-GRanges(seqnames="chr22",ranges=IRanges(start=1,end=51304566))
+ah_chip.bw<-import(ah_chip,which=chr22,as="Rle")
+
+table(table(ah_chip.bw$chr22))
+class(ah_chip.bw$chr22)
+
+ah_chip.bw.view<-Views(ah_chip.bw$chr22,start=start(ah_chr22),end=end(ah_chr22))  #what I had got from here?
+
+
+mean(ah_chip.bw.view)
+cor(mean(ah_chip.bw.view),ah_chr22$signalValue)
+head(runLength(ah_chip.bw$chr22))
+ah_chip.bw$chr22
+
+#Q5 how many bases on chr22, which fc.signal >=1
+try<-ah_chip.bw.view[1]
+width(ah_chip.bw.view[[2]])
+runLength(ah_chip.bw.view[[2]])
+class(runValue(ah_chip.bw.view[[2]]))
+ah_chip.bw.view
+objects(ah_chip.bw.view)
+class(ah_chip.bw.view)
+sort(runValue(try))
+head(runValue(try))
+
+ah_chip.bw.view>=1
+sum(ah_chip.bw$chr22>=1)  #這寫法也太神來之筆了吧！
+sum(sum(ah_chip.bw.view>=1))
+class(ah_chip.bw$chr22)
+class(ah_chip.bw.view)
+?Rle
+sum(runValue(ah_chip.bw$chr22)>=1)  #這樣寫也行
+ah_chip.bw.view
+
+#Q6  examine the differential expression on E003(<0.5) and E055(>2)
+#acquire the annotation data
+ah_E055=query(ah,c("H3K27me3","narrowPeak"))
+ah_E055=query(ah_E055,c("E055"))
+ah_E055<-ah_E055[["AH30313"]]
+#acquire the ChIP data bigwig
+ah_E055_fc=query(ah,c("E055","fc.signal"))
+ah_E055_fc=query(ah_E055_fc,c("H3K27me3"))
+ah_E055_fc=ah_E055_fc[["AH32470"]]
+
+ah_E055_fcimport
+chr22<-GRanges(seqnames="chr22",ranges=IRanges(start=1,end=51304566))
+ah_E055_fcimport<-import(ah_E055_fc,which=chr22,as="Rle")
+ah_E055_fcimport$chr22  #from E055
+ah_chip.bw$chr22    #from E003
+ah_E055_fcimport$chr22
+ah_E055_fcimport[chr22]
+
+#slice
+E055_ir<-slice(ah_E055_fcimport$chr22,lower=2)
+E003_ir<-slice(ah_chip.bw$chr22,upper=0.5)
+#turn to Ranges
+E055_ir_ranges=as(E055_ir,"IRanges")
+E003_ir_ranges=as(E003_ir,"IRanges")
+E055_ir_ranges
+#intersect
+comb_ir=intersect(E055_ir_ranges,E003_ir_ranges)
+sum(width(comb_ir))
+#1869937
+
+#Q7 What is the average observed-to-expected ratio of CpG dinucleotide for CpG islands on chromosome 22.
+CG<-letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"CG",as.prob=TRUE)
+letterFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,"GC",as.prob=TRUE)
+CG/(fC*fG)   #可能GC的值跟我們想要的“GC”連在一起的值不同
+＃alphabetFrequency,letterFrequency  : compute the frequency of ALL Characters
+#dinucleotideFrequency,trinucleotideFrequency,oligonucleotideFrequency
+#letterFrequencyInSlidingView: letter frequencies, but in sliding views along the string
+#consensusMatrix:consensus matrix; all a position weight matrix
+?dinucleotideFrequency
+?letterFrequencyInSlidingView
+
+#使用dinucleotideFrequency
+dinucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22)
+class(dinucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22))
+dinucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22)["AA"]
+AA<-dinucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22)["AA"]
+A_A<-dinucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22)
+sum(A_A[2])
+CG_f<-dinucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22)["CG"]
+
+#使用oligonucleotideFrequency
+oligonucleotideFrequency(BSgenome.Hsapiens.UCSC.hg19$chr22,width=3)
+
+
+#使用letterFrequencyInSlidingView
+## letterFrequencyInSlidingView()
+## ---------------------------------------------------------------------
+  data(yeastSEQCHR1)
+  x <- DNAString(yeastSEQCHR1)
+  view.width <- 48
+  letters <- c("A", "CG")
+  two_columns <- letterFrequencyInSlidingView(x, view.width, letters)
+  head(two_columns)
+  tail(two_columns)
+  three_columns <- letterFrequencyInSlidingView(x, view.width, letters, OR=0)
+  head(three_columns)
+  tail(three_columns)
+  stopifnot(identical(two_columns[ , "C|G"],
+                      three_columns[ , "C"] + three_columns[ , "G"]))
+
+  ## Note that, alternatively, 'three_columns' can also be obtained by
+  ## creating the views on 'x' (as a Views object) and by calling
+  ## alphabetFrequency() on it. But, of course, that is be *much* less
+  ## efficient (both, in terms of memory and speed) than using
+  ## letterFrequencyInSlidingView():
+  v <- Views(x, start=seq_len(length(x) - view.width + 1), width=view.width)
+  v
+  three_columns2 <- alphabetFrequency(v, baseOnly=TRUE)[ , c("A", "C", "G")]
+  stopifnot(identical(three_columns2, three_columns))
+
+  ## Set the width of the view to length(x) to get the global frequencies:
+  letterFrequencyInSlidingView(x, letters="ACGTN", view.width=length(x), OR=0)
+
+sum(letterFrequencyInSlidingView(BSgenome.Hsapiens.UCSC.hg19$chr22,letters="CG", view.width=2))
+slide_CG<-sum((letterFrequencyInSlidingView(BSgenome.Hsapiens.UCSC.hg19$chr22,letters="CG", view.width=2))!=0)
+CG_f
+nC+nG
+expected_CG
+
+CG_f/expected_CG   # 用as.numberic避免溢位
+expected_CG<-(as.numeric(nC)*as.numeric(nG))/as.numeric(nA+nC+nT+nG+nN)
+expected_CG<-(as.numeric(nC)*as.numeric(nG))/as.numeric(nA+nC+nT+nG) #比較有無加上nN的差別，似乎增加不多。
+
+##此法不可行，另闢其他作法，找有CpG的database
+##仔細思考題意，應該是要專注在CpG islands
+CpG_islands<-query(ah,c("hg19","CpG"))
+CpG_islands<-subset(CpG_islands,species=="Homo sapiens")
+CpG_islands<-CpG_islands[["AH5086"]]
+chromosome<-c(paste("chr",1:22))
+CpG_islands_s<-split(CpG_islands,seqnames(CpG_islands))
+CpG_islands_22<-CpG_islands_s$chr22
+CpG_islands_22
+head((start(CpG_islands_22)))
+CpG_islands_vi<-Views(BSgenome.Hsapiens.UCSC.hg19$chr22,start=start(CpG_islands_22),end=end(CpG_islands_22))
+CpG_G<-letterFrequency(CpG_islands_vi,"G")
+CpG_C<-letterFrequency(CpG_islands_vi,"C")
+CG<-(dinucleotideFrequency(CpG_islands_vi))  # 變成matrix
+CG[,7]
+CpG_G*CpG_C
+CpG_G
+CpG_C
+201*206
+CpG_islands_vi
+width(CpG_islands_22)  #不能用sum喔 觀念不同，待會再平均
+mean((CG[,7]*width(CpG_islands_22))/(CpG_G*CpG_C))
+＃0.8340929
+BSgenome.Hsapiens.UCSC.hg19$chr22
+chr22_hsapiens<-subset(BSgenome.Hsapiens.UCSC.hg19,se)
+
+
+＃Q8 How many TATA BOX on chromosome 22
+library(Biostrings)
+TATA<-DNAString("TATAAA")
+class(BSgenome.Hsapiens.UCSC.hg19$chr22)
+rematch_TATA<-matchPattern(reverseComplement(TATA),BSgenome.Hsapiens.UCSC.hg19$chr22) 
+match_TATA<-matchPattern(TATA,BSgenome.Hsapiens.UCSC.hg19$chr22) 
+length(rematch_TATA)+length(match_TATA)
+#27263
+＃收DNAstring,但這做法只有search其中一個strand
+
+vmatch_TATA<-vmatchPattern(TATA,BSgenome.Hsapiens.UCSC.hg19)
+vmatch_TATA<-vmatchPattern(TATA,BSgenome.Hsapiens.UCSC.hg19$chr22)
+vmatch_TATAs<-split(vmatch_TATA,seqnames(vmatch_TATA))
+vmatch_TATAs$chr22
+#27263
+
+#Q9:How manay promoters of transcripts on chr22 containg a coding sequence, contain a TATA box on the same strand as the transcripts?  use TxDb.Hsapiens.UCSC.hg19.knownGene
+
+
+
+
+
+
+
+#Q10
+library(GenomicFeatures)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txdb<-TxDb.Hsapiens.UCSC.hg19.knownGene
+head(genes(txdb))
+class(txdb)
+seqlevels(txdb,force=TRE)
+library(GenomicFeatures)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+seqlevels(txdb, force=TRUE) <- c("chr22")
+gr <- GRanges(seqnames = "chr22", ranges = IRanges(start = 1, end = 52330658))
+
+gr.trans.chr22 <- subsetByOverlaps(transcripts(txdb), gr, ignore.strand = TRUE)
+gr.trans.chr22 
+
+length(gr.trans.chr22) 
+gr.prom <- promoters(gr.trans.chr22, upstream = 900, downstream = 100)
+class(gr.prom )
+class(gr.trans.chr22)
+gr.trans.chr22
+gr.prom
+gr.cds<-cds(txdb)
+length(gr.cds)
+?cds
+
+
+#acquire the sequency 
+final_gr_prom_sequence<-Views(BSgenome.Hsapiens.UCSC.hg19$chr22,start=start(promindex),end=end(promindex))
+gr_cds_sequence<-Views(BSgenome.Hsapiens.UCSC.hg19$chr22,start=start(cdsindex),end=end(cdsindex))
+trans_promoter_chr22_gr.cds
+
+promindex<-gr.prom[unique(queryHits(findOverlaps(gr.prom,gr.cds)))]
+cdsindex<-gr.trans.chr22[unique(subjectHits(findOverlaps(gr.prom,gr.trans.chr22)))] #wrong
+
+
+ffinal_gr_prom_sequence<-gr.prom[unique(queryHits(findOverlaps(prom_cds_trans,gr.prom)))]
+
+head(final_gr_prom_sequence)
+
+reverseComplement(TATA)
+length(matchPattern(TATA,final_gr_prom_sequence))+length(matchPattern(reverseComplement(TATA),final_gr_prom_sequence))
+length(matchPattern(TATA,gr_prom_sequence))+length(matchPattern(reverseComplement(TATA),gr_prom_sequence))
+
+
+# use bsapply
+class(trans_promoter_chr22_gr.cds)
+rans_promoter_chr22_sequence_rTATA<-matchPattern(TATA,trans_promoter_chr22_gr.cds)
+rans_promoter_chr22_sequence_rTATA
+trans_promoter_chr22_gr.cds
+
+class(trans_promoter_chr22_sequence)
+trans_promoter_chr22_sequence
+countPattern(TATA,trans_promoter_chr22_gr.cds)
+rans_promoter_chr22_sequence_TATA<-vmatchPattern(TATA,trans_promoter_chr22_gr.cds)
+rans_promoter_chr22_sequence_TATA
+rans_promoter_chr22_sequence_rTATA<-matchPattern(TATA,trans_promoter_chr22_gr.cds)
+length(rans_promoter_chr22_sequence_TATA)+length(rans_promoter_chr22_sequence_rTATA)
+length(rans_promoter_chr22_sequence_TATA)
+#178
+
+tl.chr22 <- transcriptLengths(txdb, with.cds_len = TRUE) #rtn df
+tl.chr22  <- tl.chr22[tl.chr22$cds_len > 0,]
+trans.eval <- gr.prom[mcols(gr.prom)$tx_id %in% tl.chr22$tx_id]
+sum(coverage(trans.eval) > 1)
+tl.chr22 

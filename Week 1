@@ -1,0 +1,271 @@
+#Bioconductor for genomic data
+#quiz01
+
+
+source("http://www.bioconductor.org/biocLite.R")
+biocLite("AnnotationHub")
+biocLite(c("rtracklayer","AnnotationHub"))
+
+library(GenomicRanges)
+library(rtracklayer)
+library(AnnotationHub)
+ahub=AnnotationHub()
+#ghs=query(ahub,c("H3K4me3","H3K27me3","E003"))
+#ghs_1=query(ahub,c("E003","H3K4me3"))
+#ghs_2=query(ahub,c("E003","H3K27me3"))
+
+ah<-subset(ahub,species=="Homo sapiens")
+ah_1<-query(ah,"H3K4me3")
+ah_2<-query(ah_1,"Gm12878")
+ah_2
+
+ah_2$title
+ah_2$dataprovider
+
+gr1<-subset(ah_2,title=="wgEncodeUwHistoneGm12878H3k4me3StdPkRep1.narrowPeak.gz")
+gr1
+
+ah_2<-query(ah,"Refseq")
+ah_2
+ah_2$genome
+genome(gr1)
+
+refseq<-ah_2[ah_2$genome=="hg19"&ah_2$title=="Refseq Genes"]
+genome()
+data_CpG<-query(ah,"CpG Islands")
+data_CpG[["AH5086"]]   # Version hg19
+data_CpG[["AH5204"]]   # Version hg18
+data_CpG[["AH5344"]]   # Version hg17
+data_CpG[["AH5463"]]   # Version hg16
+data_CpG<-data_CpG[["AH5086"]]
+summary(width(data_CpG))
+seqinfo(data_CpG)
+seqlevels(data_CpG)
+gaps(data_CpG)
+data_CpG
+sum(as.numeric(seqlengths(reduce(data_CpG))))
+
+reduce_data<-reduce(data_CpG)
+(coverage(reduce_data))[1:5]    
+4925+3377+2327+2063+2459+2507+3157+1793+2075+2453+2287+2735+2443+1211+1577+1585+2983+3269+1015+1603+363+5083+1439+731
+(coverage(reduce_data))[6:10]
+(coverage(reduce_data))[11:15]
+(coverage(reduce_data))[16:20]
+(coverage(reduce_data))[21:25]
+reduce_data
+
+#split the data as the chromosome title
+split_data<-split(reduce_data,seqnames(reduce_data))
+
+#subset the data to autosome chr1-22
+chromosome<-c(paste("chr",1:22,sep=""))
+autosomoe_data<-split_data[chromosome]
+
+#CpG island number (foolish way)
+2462+1688+1163+1031+1229+1253+1578+1037+1226+1143+1367+1221+605+788+792+1491+1634+507+801+2541+719+365
+#Q1:smarter way:combine back
+unlist(autosomoe_data)
+autosomoe_data
+#Q2:CpG on chromosom 4
+autosomoe_data[4]
+
+#find the  H3K4me3 histone modification(H1 cell line)from annotationHub
+#narrowPeak for histon modification
+ah_1<-query(ah,c("H3K4me3","E003"))
+ah_1<-query(ah_1,"H3K4me3")
+H3K_H1<-ah_1[["AH29884"]]      #retrieve the resource
+H3K_H1<-query(H3K_H1,"H3K4me3")
+H3K_H1
+
+
+#split to list
+H3K_H1_split<-split(H3K_H1,seqnames(H3K_H1),)
+H3K_H1_split
+#subset to chr1-22
+auto_H3K_H1<-H3K_H1_split[chromosome]
+auto_H3K_H1
+
+
+#Q3:calculation the base-pairs
+sum(width(unlist(auto_H3K_H1)))
+auto_H3K_H1
+
+#calculate the mean of the signalValue(metacolumn data)
+unlist_H3K_H1<-unlist(auto_H3K_H1)
+mean((unlist_H3K_H1)$signalValue)
+
+
+#Q4#Obtain the data from the H3K27me3
+H3K27<-query(ah,c("E003","H3K27me3"))
+H3K27<-query(H3K27,"narrowPeak")
+H3K27<-H3K27[["AH29892"]]
+
+#name with the seqnames
+names(H3K27)<-seqnames(H3K27)
+
+#subset to the names
+chromosome<-c(paste("chr",1:22,sep=""))
+H3K27_split<-split(H3K27,seqnames(H3K27))
+H3K27_split<-H3K27_split[chromosome]
+
+#calculate the mean of signalValue for H3K27me3
+mean(((unlist(H3K27))$signalValue))
+
+
+#compare the unlist_H3K27 and unlist_H3K_H1
+unlist_H3K27<-unlist(H3K27_split)
+unlist_H3K27
+unlist_H3K_H1
+seqnames(unlist_H3K27)
+seqnames(unlist_H3K_H1)
+hit<-findOverlaps(unlist_H3K27,unlist_H3K_H1,type="any")
+#type ="any"/"within"/"start"/"end"/"equal"
+head(hit)
+sum(width(unique(ranges(unlist_H3K27)[queryHits(hit)])))
+ranges(unlist_H3K27)[queryHits(hit)]
+hit_range<-data.frame((ranges(unlist_H3K27))[queryHits(hit),],(ranges(unlist_H3K_H1))[subjectHits(hit),])
+hit_range
+names(hit_range)
+
+#try 01
+set_1_H3K27<-ranges(unlist_H3K27)[queryHits(hit),]
+set_2_H3KH1<-ranges(unlist_H3K_H1)[subjectHits(hit),]
+set_1_H3K27
+set_2_H3KH1
+sum(width(intersect(set_1_H3K27,set_2_H3KH1)))
+
+#bivalent region
+bi_direct<-intersect(unlist_H3K27,unlist_H3K_H1)
+bi_region<-intersect(set_1_H3K27,set_2_H3KH1)
+bi0_region<-pintersect(set_1_H3K27,set_2_H3KH1)
+sum(width(bi_region))
+sum(width(reduce(bi_region)))
+sum(width(reduce(bi0_region)))
+#Q5
+sum(width(reduce(bi_direct)))  
+width(bi_region)
+
+#check bivalent regions overlap CpG Islands
+#得出來不是選項裡的
+unlist_CpGland<-unlist(autosomoe_data)
+bi_direct
+unlist_CpGland
+over_CpG_bivalent
+over_CpG_bivalent<-intersect(bi_direct,unlist_CpGland)
+sum(width(over_CpG_bivalent))/sum(width(reduce(bi_region)))
+
+＃Q6:bivalent regions overlap CpG Islands  
+overlaps_CpG_bivalent<-findOverlaps(bi_direct, unlist_CpGland)
+length(unique(queryHits(overlaps_CpG_bivalent)))/length(bi_direct)
+
+
+#Q7:the bases which are part of CpG Islands, are also bivalent marked.
+overlaps_bivalent_CpG<-findOverlaps(unlist_CpGland,bi_direct,type="any")
+sum(width(over_CpG_bivalent))/sum(width(unlist_CpGland))
+
+
+#Q8:How many bases are bivalently marked within 10kb of CpG Islands?
+
+rank_CpGland<-unlist_CpGland[c(order(width(unlist_CpGland)))]    
+summary(width(rank_CpGland)) 
+names(width(rank_CpGland))<-c("width")
+width_CpG<-width(rank_CpGland)
+width_CpG<-data.frame(width_CpG,c(1:26641))
+width_CpG
+CpG_10000<-rank_CpGland[1:26628]
+CpG_1000_intersect<-intersect(CpG_10000,bi_direct)
+sum(width(CpG_1000_intersect))
+CpG_10000
+
+resize_CpGland<-resize(unlist_CpGland,width=10000,fix="start")
+bivalent_in_Cpg<-intersect(resize_CpGland,bi_direct)
+sum(width(bivalent_in_Cpg))
+resize_CpGland
+
+
+#Q9 How big a fraction (expressed as a number between 0 and 1) of the human genome is contained in a CpG Island?
+data_CpG<-query(ah,"CpG Islands")
+data_whole<-query(ahub,"seqlengths")
+data_CpG<-data_CpG[["AH5086"]]
+sum(width((data_CpG)))
+sum(as.numeric(seqlengths(data_CpG)))
+sum(width((data_CpG)))/sum(as.numeric(seqlengths(data_CpG)))
+data_CpG_list<-split(data_CpG,seqnames(data_CpG))
+data_CpG_auto<-data_CpG_list[chromosome]
+seqnames(data_CpG_auto)
+#WRONG PART
+sum(as.numeric(width(unlist(data_CpG_auto))))/sum(as.numeric(width(data_CpG)))
+seqlengths(unlist(autosomoe_data))
+sum(as.numeric(seqlengths(reduce(autosomoe_data))))#auto
+autosomoe_data[RLe="chrUn_gl000239"]
+seqlengths(reduce(autosomoe_data))
+sum(as.numeric(seqlengths(reduce(data_CpG_list))))#whole
+#why whole = auto
+#後來覺得seqlengths代表得是掃過的sequence長度
+chromosome_xy<-c("chrX","chrY",chromosome)
+new_set<-data.frame(names(seqlengths(autosomoe_data_xy)[1:24]),seqlengths(autosomoe_data_xy)[1:24])
+
+
+#try03
+new_set_2<-data.frame(names(seqlengths(autosomoe_data_xy)[chromosome]),seqlengths(autosomoe_data_xy)[chromosome])
+##most close the Q9
+sum(as.numeric(width(unlist(autosomoe_data))))/sum(as.numeric(new_set_2[,2]))
+
+
+
+#try01
+sum(as.numeric(new_set[,2]))  #chromoe 1-22+xy seqlength
+autosomoe_data_xy<-split_data[chromosome_xy]
+#try02
+sum(as.numeric(width(unlist(autosomoe_data_xy))))/sum(as.numeric(new_set[,2]))
+
+
+
+
+sum(as.numeric(width(unlist(autosomoe_data_xy))))/sum(as.numeric(seqlengths(reduce(unlist(data_CpG_list)))))
+
+
+
+
+
+sum(as.numeric(width(unlist(autosomoe_data))))/sum(as.numeric(seqlengths(reduce(data_CpG_list))))
+＃可能要先把分母去乾淨一點,或是用還沒有分過的來做
+sum(as.numeric(width(unlist(data_CpG_list))))/sum(as.numeric(seqlengths((data_CpG_list))))
+＃直接用沒有分過的data set還是不夠理想
+data_CpG_list
+
+
+#Q10 Compute an odds-ratio for the overlap of bivalent marks with CpG islands.
+#CpG island 26641
+#  bivalent marks with CpG island/bivalent marks without CpG island
+
+class(unlist(data_CpG_list))
+ranges(unlist(data_CpG_list)) # turn the GRanges into IRanges in order to use the "intersect"
+intersect(bi_region,ranges(unlist(data_CpG_list)))  # CpG and Bivalent
+
+length(unlist(data_CpG_list))
+unlist(data_CpG_list)
+
+#try01
+sum(width(bi_region))
+#a=bivalen+CpG
+#b=bivalent without CpG
+#c=no bivalent with CpG
+#d=no bivalen and CpG
+A<-sum(width(intersect(bi_region,ranges(unlist(data_CpG_list)))))
+B<-(sum(width(bi_region))-sum(width(intersect(bi_region,ranges(unlist(data_CpG_list))))))
+C<-(sum(as.numeric(width(unlist(data_CpG_list))))-sum(width(intersect(bi_region,ranges(unlist(data_CpG_list))))))
+D<-(sum(as.numeric(seqlengths((data_CpG_list))))-A-B-C)
+sum(width(intersect(bi_region,ranges(unlist(data_CpG_list)))))/(sum(width(bi_region))-sum(width(intersect(bi_region,ranges(unlist(data_CpG_list))))))
+Odd_ratio<-A*D/B*C
+Odd_ratio
+A/(B+C)
+A
+B
+C
+D
+data_CpG_list
+overlap of bivalent marks with CpG islands
+0.5383644/(1-0.5383644)
+no overlapt of bivalent marks with CpG islands  
+1-0.5383644

@@ -1,0 +1,254 @@
+##Quiz 4 Bioconductor for Genomic Data
+#20141031
+
+
+#Q1:The yeastRNASeq experiment data package contains FASTQ files from an RNA seq experiment in yeast. When the package is installed, you can access one of the FASTQ files by the path given by 
+#library(yeastRNASeq)
+#fastqFilePath <-system.file("reads","wt_1_f.fastq.gz",package="yeastRNASeq")
+
+#Question: What fraction of reads in this file has an A nucleotide in the 5th base of the read?
+
+source("https://www.bioconductor.org/biocLite.R")
+biocLite("yeastRNASeq")  #306mb
+library(ShortRead)
+library(yeastRNASeq)
+library(Biostrings)
+
+
+
+fastqFilePath<-system.file("reads","wt_1_f.fastq.gz",package="yeastRNASeq")
+reads<-readFastq(fastqFilePath)
+
+
+DNAStringSet<-sread(reads)
+sread(reads)[1]
+class(reads)
+
+
+consensusMatrix(DNAStringSet,baseOnly=TRUE) # 這可以算出reads每個位置在所有reads中ATCG的數量
+
+consensusMatrix(DNAStringSet,as.prob=TRUE,baseOnly=TRUE)
+consensusMatrix(DNAStringSet,as.prob=TRUE,baseOnly=TRUE)
+
+#Answer= 0.3638
+
+Question 2: What is the average numeric quality value of these reads?
+quality(reads)
+mean(as(quality(reads),"matrix")[,5])
+#Answer=28.93376
+
+#Question 3: In this interval, how many reads are dupicated by position?
+library(Rsamtools)
+source("https://www.bioconductor.org/biocLite.R")
+biocLite("leeBamViews")
+
+bamFilePath<-system.file("bam","isowt5_13e.bam",package="leeBamViews") # pointer the file
+
+bamFile<-BamFile(bamFilePath)
+bamFile
+seqinfo(bamFile)
+seqlevels(bamFile)
+
+aln<-scanBam(bamFile)
+length(aln)
+class(aln)
+aln<-aln[[1]]
+names(aln)
+aln$qname
+lapply(aln,function(xx)xx[2])
+
+yieldSize(bamFile)<-1
+open(bamFile)
+scanBam(bamFile)[[1]]$seq
+
+close(bamFile)
+yieldSize(bamFile)<-NA
+
+open(bamFile)
+gr<-GRanges(seqnames="Scchr13",ranges=IRanges(start=c(800000),end=c(801000)))
+params<-ScanBamParam(which=gr,what=scanBamWhat())
+aln<-scanBam(bamFile,param=params)
+names(aln)
+class(aln)
+pileup_bamFile<-pileup(bamFile)
+class(pileup_bamFile)
+names(pileup_bamFile)
+pileup_bamFile$pos
+plot(x=pileup_bamFile$pos,y=pileup_bamFile$count)
+table(aln$pos)
+class(aln[[1]])
+class(aln)
+sum(table(aln[[1]]$pos)<2)
+sum(table(aln[[1]]$pos))-sum(table(aln[[1]]$pos)<2)
+#Answer=129
+
+#Question 4:What is the average number of reads across the 8 samples falling in this interval?
+#the package contains 8 BAM files in total, representing 8different samples from 4 groups
+
+bpaths<-list.files(system.file("bam",package="leeBamViews"),pattern="bam$",full=TRUE)
+bamView<-BamViews(bpaths)
+gr_1<-GRanges(seqnames="Scchr13",ranges=IRanges(start=c(807762),end=c(808068)))
+params<-ScanBamParam(which=gr,what=scanBamWhat()) #不確定要不要這行
+bamRanges(bamView)<-gr_1
+aln_group<-scanBam(bamView)
+class(aln_group)
+aln_group
+names(aln_group)
+
+lapply(aln_group,function(x)x[[1]]$pos)
+aln_group_seq<-lapply(aln_group,function(x)x[[1]]$seq)
+length(lapply(aln_group_seq,function(x)x[1])) #fail
+class(aln_group_seq)
+aln_group_seq
+length(aln_group_seq[2])
+(31+31+116+116+108+94+102+124)/8
+#Answer:90.23
+
+#Question 5 : What is the average expression across samples in the control group for the "8149273" probeset (this is a character identifier, not a row number)
+library(oligo)
+library(GEOquery)
+library(simpleaffy)
+library(annotate)
+
+#annotation:pd.hugene.1.0.st.v1 
+source("https://bioconductor.org/biocLite.R")
+biocLite("pd.hugene.1.0.st.v1")
+library(pd.hugene.1.0.st.v1)
+pd.hugene.1.0.st.v1
+#download the data
+getGEOSuppFiles("GSE38792")
+list.files("GSE38792")
+
+untar("GSE38792/GSE38792_RAW.tar",exdir="GSE38792/CEL")
+list.files("GSE38792/CEL")
+#read the data with oligo
+celfiles<-list.files("GSE38792/CEL",full=TRUE)
+rawData<-read.celfiles(celfiles)
+
+rawData
+
+getClass("GeneFeatureSet")
+#process the data name
+filename<-sampleNames(rawData)
+pData(rawData)$filename<-filename
+sampleNames<-sub(".*_","",filename)
+sampleNames<-sub(".CEL.gz$","",sampleNames)
+sampleNames(rawData)<-sampleNames
+pData(rawData)$group<-ifelse(grepl("^OSA",sampleNames(rawData)),"OSA","Control") #超棒寫法
+pData(rawData)
+class(rawData)
+#normalized
+normData=rma(rawData)
+normData
+normData_exprs<-exprs(normData)
+head(normData_exprs)
+-------------------------------------------------------------------fail try
+(蠻奇怪的，normalized 後，所有的probeset都有名字了，不太知道為何會這樣，以下都是各種嘗試想要找回probename的方法。)
+expression_rawdata<-exprs(rawData)
+control_expression<-expression_rawdata[,1:8]
+rawData_control <-rawData[,1:8]
+rawData_control_exprs<-exprs(rawData_control )
+head(rawData_control_exprs)
+head(rowname(control_expression))
+?getProbeInfo
+probe_info_raw<-getProbeInfo(rawData)
+probe_info_control<-getProbeInfo(rawData_control)
+class(probe_info_control)
+dim(probe_info_control)
+dim(rawData_control_exprs)
+dim(probe_info_raw)
+head(rawData_control_exprs)
+sampleNames(rawData)
+probesetNames(rawData)
+rownames(rawData)<-probesetNames(rawData)
+---------------------------------------------------------------------fail try
+head(normData_exprs)
+class(normData_exprs)
+normDataexprs_control<-normData_exprs[,1:8]
+head(normDataexprs_control)
+#find the “8149273” probeset
+match("8149273",rownames(normDataexprs_control))
+#29678
+match("7892501",rownames(normDataexprs_control)) # Test the function
+mean(normDataexprs_control[29678,])
+#Answer= 7.02183
+
+#Question 6 :What is the absolute value of the log foldchange(logFC) of the gene with the lowest P.value?
+library(limma)
+class(normDataexprs_control)
+class(normData)
+phenoData(normData)
+pData(normData)
+normData$group
+
+normData$group<-factor(normData$group)
+design<-model.matrix(~normData$group)
+fit<-lmFit(normData,design)
+fit<-eBayes(fit)
+topTable(fit)
+table(fit)
+fit
+min(fit$p.value)
+max(fit$p.value)
+expression_differential_pvalue<-fit$p.value
+match(min(fit$p.value),fit$p.value)
+match(min(fit$p.value),fit$p.value)
+fit_topTable<-topTable(fit,number=33300)
+fit_topTable
+#Anser=0.7126
+
+Question 7:How many genes are differentially expressed between the two groups at an adj.P.value cutoff of 0.05
+head(fit_topTable)
+class(fit_topTable)
+cut_off<-subset(fit_topTable,adj.P.Val<0.05)
+cut_off
+
+#Answer=0
+
+Question 8:What is the mean difference in beta values between the 3 normal samples and the 3 cancer samples,across OpenSea CpG?
+source("https://bioconductor.org/biocLite.R")
+biocLite("minfin")
+library(minfiData)
+library(minfin)
+RGsetEx
+RGsetEX_normalized<-preprocessFunnorm(RGsetEx)
+RGsetEX_normalized
+granges(RGsetEX_normalized)
+
+Beta_value<-getBeta(RGsetEX_normalized)
+class(Beta_value)
+head(Beta_value)
+pData(RGsetEx)
+normal<-Beta_value[,c(1,2,5)]
+cancer<-Beta_value[,c(3,4,6)]
+RGsetEX_nor_openSea<-RGsetEX_normalized[c(getIslandStatus(RGsetEX_normalized)=="OpenSea"),]
+
+Beta_Value_openSea<-getBeta(RGsetEX_nor_openSea)
+normal_openSea<-Beta_Value_openSea[,c(1,2,5)]
+cancer_openSea<-Beta_Value_openSea[,c(3,4,6)]
+mean(normal_openSea)-mean(cancer_openSea)
+#Answer=0.08462511
+
+Question 9: How many of these DNase hypersensitive sites contain one or more CpG on the 450k array?
+
+library(AnnotationHub)
+ah<-AnnotationHub()
+ah<-subset(ah,species=="Homo sapiens")
+ah_Caco2<-query(ah,c("Caco2","Awg","Dna"))
+ah_Caco2<-ah_Caco2[["AH22442"]]
+ah_Caco2
+CpG_450K<-granges(RGsetEX_normalized)
+reduce(CpG_450K)
+unique(findOverlaps(ah_Caco2,CpG_450K,type="within"))
+unique(findOverlaps(CpG_450K,ah_Caco2,type="within"))
+#67365(x)/90561(x)/76722/29265/40151
+source("https://bioconductor.org/biocLite.R")
+biocLite("IlluminaHumanMethylation450kanno.ilmn12.hg19")
+library(IlluminaHumanMethylation450kanno.ilmn12.hg19)
+CpG<-IlluminaHumanMethylation450kanno.ilmn12.hg19
+
+class(CpG)
+
+
+Question 10
+# 87

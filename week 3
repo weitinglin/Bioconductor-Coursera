@@ -1,0 +1,144 @@
+## Bioconductor for Genomic Data
+#20151026
+#quiz 3
+
+#QI: What is the mean expression across all features for sample 5 in the ALL dataset(from the ALL package)?
+source("https://bioconductor.org/biocLite.R")
+biocLite("ALL")
+
+#load the library
+library("ALL")
+library("Biobase")
+library("genefilter")
+#subset the data
+sample_5<-ALL[,c(5)]
+#get the expression 
+sample_5_expression<-exprs(sample_5)
+mean(sample_5_expression)
+#5.629627
+
+#Q2:using the Ensembl 75, annotate each feature of the ALL dataset with the Ensembl gene id. how many probesets (features) are annotated with more than one Ensembl gene ID?
+source("http://bioconductor.org/biocLite.R")
+biocLite("biomaRt")
+biocLite("hgu95av2.db")   # the microarray use in the ALL database
+
+#load the library
+library("biomaRt")
+library("hgu95av2.db")
+listMarts()
+mart<-useMart(host='feb2014.archive.ensembl.org', biomart = "ENSEMBL_MART_ENSEMBL")
+ensembl<-useDataset("hsapiens_gene_ensembl",mart)
+class(mart)
+listDatasets(mart)
+feature_name<-featureNames(ALL)
+annotation_ALL<-getBM(attributes=c("ensembl_gene_id","affy_hg_u95av2"),filters="affy_hg_u95av2",values=feature_name,mart=ensembl)
+summary(annotation_ALL)
+sum(table(annotation_ALL[,2])>1)
+#1045
+
+Q3:How many probesets (Affymetrix IDs) are annotated with one or more genes on the autosomes (chr 1-22)
+#參考biomaRt Bioconductor上的說明之task 3
+attributes<-listAttributes(ensembl)
+list_filter<-listFilters(ensembl)
+chrom<-c(1:22)
+annotation_ALL_chr<-getBM(attributes=c("ensembl_gene_id","affy_hg_u95av2","chromosome_name"),filters=c("affy_hg_u95av2","chromosome_name"),values=list(feature_name,chrom),mart=ensembl)
+
+table(annotation_ALL_chr[,2])
+sum(table(table(annotation_ALL_chr[,2])))
+#11016
+
+Q4:What is the mean value of the Methylation channel across the features for sample #"5723646052_R04C01" (use the MsetEx dataset from the minfiData package)
+#great manual for MsetEx function
+#https://www.bioconductor.org/help/course-materials/2015/BioC2015/methylation450k.html
+
+source("https://www.bioconductor.org/biocLite.R")
+biocLite("minfiData")
+biocLite("minfi")
+
+#load the library
+library(minfiData)
+library(minfi)
+
+#explore the data
+data(MsetEx)
+?MsetEx
+head(sampleNames(MsetEx))
+head(getMeth(MsetEx))
+pData(MsetEx)
+
+#subsetting the data
+mean(getMeth(MsetEx)[,2])
+
+#7228.277
+
+Q5: Access the processed data from NCBI GEO Accession number GSE788, what is the mean expression level of sample GSM9024?
+source("https://www.bioconductor.org/biocLite.R")
+biocLite("GEOquery")
+library(GEOquery)
+eList<-getGEO("GSE788")
+class(eList)
+eData<-eList[[1]]
+class(eData)
+pData(eData)
+names(pData(eData))
+mean(exprs(eData)[,2])
+#756.432
+
+Q6:What is the average of the average length across the samples in the expriment?
+source("https://www.bioconductor.org/biocLite.R")
+biocLite("airway")
+
+library(airway)
+library(GenomicRanges)
+
+data(airway)
+colData(airway)
+class(airway)
+
+mean(airway$avgLength)
+#113.75
+
+
+Q7: What is the number of Ensembl genes which have a count of 1 read or more in sample SRR1039512?
+
+table(assay(airway)[,3])
+sum(assay(airway,"counts")>=1)
+
+sum(assay(airway)[,3]>=1)
+#2599
+
+
+#Q8:he airway dataset contains more than 64k features. How many of these features overlaps with transcripts on the autosomes (chromosomes 1-22) as represented by the TxDb.Hsapiens.UCSC.hg19.knownGene package?
+
+source("https://www.bioconductor.org/biocLite.R")
+biocLite(c("GenomicFeatures","TxDb.Hsapiens.UCSC.hg19.knownGene"))
+
+#load the packages
+library(GenomicFeatures)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+txdb<-TxDb.Hsapiens.UCSC.hg19.knownGene
+class(exons(TxDb.Hsapiens.UCSC.hg19.knownGene))
+
+class(exons(TxDb.Hsapiens.UCSC.hg19.knownGene))
+
+data_chrom<-split(TxDb.Hsapiens.UCSC.hg19.knownGene,)
+
+
+crossTD<-exons(TxDb.Hsapiens.UCSC.hg19.knownGene)
+cross_transcript<-transcripts(TxDb.Hsapiens.UCSC.hg19.knownGene)
+chrom<-c(paste("chr",1:22))
+dim(airway)
+rowdata_one_unlist<-unlist(rowdata_one)
+rowdata_one<-rowRanges(airway)	
+subsetByOverlaps(airway)
+
+
+TxDb.Hsapiens.UCSC.hg19.knownGene
+
+findOverlaps(crossTD,rowdata_one_unlist)
+
+
+Q8:26276
+Q9:not 0.8315966
+      not 0.8749633
+Q10:232
